@@ -1,0 +1,35 @@
+name: reusable-validate-pr
+
+# PR-only gate. Called from a pull_request event, so github.base_ref /
+# github.head_ref are available here through the caller's event context.
+on:
+  workflow_call:
+
+jobs:
+  validating:
+    name: Validate PR / Validating
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce merge policy
+        run: |
+          BASE="${{ github.base_ref }}"
+          HEAD="${{ github.head_ref }}"
+          echo "PR: $HEAD -> $BASE"
+          if [ "$BASE" = "integration" ]; then
+            echo "$HEAD" | grep -Eq '^(feature|bugfix|hotfix)/.+$' \
+              || { echo "❌ Into integration only: feature/*, bugfix/*, hotfix/* (got: $HEAD)"; exit 1; }
+          elif [ "$BASE" = "main" ]; then
+            if [ "$HEAD" = "integration" ]; then echo "✅ integration -> main allowed";
+            else echo "$HEAD" | grep -Eq '^hotfix/.+$' \
+              || { echo "❌ Into main only: integration or hotfix/* (got: $HEAD)"; exit 1; }; fi
+          else
+            echo "❌ PRs only to integration or main (got base: $BASE)"; exit 1
+          fi
+          echo "✅ branch policy passed"
+      - name: Require Risk + Rollback in PR body
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          echo "$BODY" | grep -qi "risk" || { echo "❌ PR body must have a Risk section"; exit 1; }
+          echo "$BODY" | grep -qi "rollback" || { echo "❌ PR body must have a Rollback section"; exit 1; }
+          echo "✅ PR hygiene passed"

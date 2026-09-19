@@ -1,5 +1,14 @@
 name: ci-cd
 
+# Thin orchestrator. The `orchestrate` job decides which jobs run on what
+# condition; every other job is a call to its own file below and is gated
+# on an orchestrator output. Routing lives in exactly one place.
+#
+#   PR (any target)  → test, coverage, build, validate-pr (no deploys)
+#   Push integration → test, coverage, build, publish, QA + STG, smoke
+#   Push main        → test, coverage, build, version-up, publish,
+#                      QA + STG, PROD (approval), sync integration, smoke
+
 on:
   pull_request:
     types: [opened, synchronize, reopened, edited]
@@ -56,183 +65,82 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "event=$EVENT ref=$REF -> ci=$RUN_CI qa=$QA stg=$STG prod=$PROD version=$VER sync=$SYNC"
 
-  # ── PR + push: tests (matrix like the screenshot) ──
+  # ── PR + push: tests (matrix) ──
   run-tests:
     name: Run Test / Testing
     needs: orchestrate
     if: needs.orchestrate.outputs.run_ci == 'true'
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node: [18, 20]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node }}
-      - run: npm install --prefix app
-      - run: npm --prefix app test
+    uses: ./.github/workflows/reusable-test.yml
 
   coverage:
     name: Run Test / Coverage Report
     needs: [orchestrate, run-tests]
     if: needs.orchestrate.outputs.run_ci == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: npm install --prefix app
-      - run: npm --prefix app test -- --experimental-test-coverage 2>&1 | tee coverage.txt || npm --prefix app test
-      - uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage.txt
+    uses: ./.github/workflows/reusable-coverage.yml
 
   # ── PR + push: build validation ──
   validate-build:
     name: Validate Build / Building
     needs: [orchestrate, run-tests]
     if: needs.orchestrate.outputs.run_ci == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: docker build -t app:${{ github.sha }} ./app
+    uses: ./.github/workflows/reusable-build.yml
 
   # ── PR only: branch policy + PR hygiene ──
   validate-pr:
     name: Validate PR / Validating
     needs: orchestrate
     if: needs.orchestrate.outputs.is_pr == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Enforce merge policy
-        run: |
-          BASE="${{ github.base_ref }}"
-          HEAD="${{ github.head_ref }}"
-          echo "PR: $HEAD -> $BASE"
-          if [ "$BASE" = "integration" ]; then
-            echo "$HEAD" | grep -Eq '^(feature|bugfix|hotfix)/.+$' \
-              || { echo "❌ Into integration only: feature/*, bugfix/*, hotfix/* (got: $HEAD)"; exit 1; }
-          elif [ "$BASE" = "main" ]; then
-            if [ "$HEAD" = "integration" ]; then echo "✅ integration -> main allowed";
-            else echo "$HEAD" | grep -Eq '^hotfix/.+$' \
-              || { echo "❌ Into main only: integration or hotfix/* (got: $HEAD)"; exit 1; }; fi
-          else
-            echo "❌ PRs only to integration or main (got base: $BASE)"; exit 1
-          fi
-          echo "✅ branch policy passed"
-      - name: Require Risk + Rollback in PR body
-        env:
-          BODY: ${{ github.event.pull_request.body }}
-        run: |
-          echo "$BODY" | grep -qi "risk" || { echo "❌ PR body must have a Risk section"; exit 1; }
-          echo "$BODY" | grep -qi "rollback" || { echo "❌ PR body must have a Rollback section"; exit 1; }
-          echo "✅ PR hygiene passed"
+    uses: ./.github/workflows/reusable-validate-pr.yml
 
-  # ── Push main only: version bump (makes main exactly +1 ahead) ──
+  # ── Push main only: version bump (main goes exactly +1 ahead) ──
   version-up:
     name: Version Up / Updating Version
     needs: [orchestrate, validate-build]
     if: needs.orchestrate.outputs.do_version == 'true'
-    runs-on: ubuntu-latest
     permissions:
       contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-          fetch-depth: 0
-      - run: bash scripts/bump-version.sh
-      - run: git push origin main && git push origin --tags
+    uses: ./.github/workflows/reusable-version.yml
 
   # ── Push integration/main: publish artifacts ──
   publish-artifacts:
     name: Publish Artifacts
     needs: [orchestrate, validate-build]
     if: needs.orchestrate.outputs.deploy_qa == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: |
-          mkdir -p dist
-          echo "${{ github.sha }}" > dist/SHA
-          cat VERSION > dist/VERSION
-          echo "${{ github.ref_name }}" > dist/BRANCH
-      - uses: actions/upload-artifact@v4
-        with:
-          name: release-${{ github.sha }}
-          path: dist/
+    uses: ./.github/workflows/reusable-publish.yml
 
   # ── Push integration → QA + STG · Push main → QA + STG (+ PROD below) ──
   deploy-qa:
     name: QA Deployment
     needs: [orchestrate, publish-artifacts]
     if: needs.orchestrate.outputs.deploy_qa == 'true'
-    runs-on: ubuntu-latest
-    environment: qa
-    steps:
-      - run: echo "Deploying ${{ github.sha }} (v$(cat VERSION 2>/dev/null || echo dev)) to QA"
+    uses: ./.github/workflows/reusable-deploy-qa.yml
 
   deploy-stg:
     name: STG Deployment
     needs: [orchestrate, publish-artifacts]
     if: needs.orchestrate.outputs.deploy_stg == 'true'
-    runs-on: ubuntu-latest
-    environment: stg
-    steps:
-      - run: echo "Deploying ${{ github.sha }} to STG"
+    uses: ./.github/workflows/reusable-deploy-stg.yml
 
   # ── Push main only: PROD behind approval gate ──
   deploy-prod:
     name: PROD Deployment / Approval
     needs: [orchestrate, publish-artifacts]
     if: needs.orchestrate.outputs.deploy_prod == 'true'
-    runs-on: ubuntu-latest
-    environment: prod
-    steps:
-      - run: echo "Deploying ${{ github.sha }} to PROD (approved)"
+    uses: ./.github/workflows/reusable-deploy-prod.yml
 
   # ── Push main only: sync integration with main (after version commit) ──
   sync-integration:
     name: Sync Integration / Updating
     needs: [orchestrate, version-up]
     if: needs.orchestrate.outputs.do_sync == 'true'
-    runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin main integration
-          git checkout integration
-          git merge --no-ff origin/main -m "chore(sync): merge main into integration after release" \
-            || { echo "Merge conflict — opening PR instead";
-                 # Fallback if integration protection blocks direct push:
-                 # gh pr create --base integration --head main --title "chore(sync): main -> integration" --body "Auto-sync after release"
-                 exit 1; }
-          git push origin integration
+    uses: ./.github/workflows/reusable-sync.yml
 
   # ── Post-deploy smoke ──
   post-deploy:
     name: Post Deployment / Smoke
     needs: [orchestrate, deploy-qa, deploy-stg]
     if: needs.orchestrate.outputs.deploy_qa == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: |
-          npm install --prefix app
-          PORT=3999 APP_VERSION=$(cat VERSION) node app/index.js &
-          PORT=3999 APP_VERSION=$(cat VERSION) node app/index.js &
-          sleep 3
-          curl -fsS http://localhost:3999/health | grep -q ok && echo "✅ smoke passed"
+    uses: ./.github/workflows/reusable-smoke.yml

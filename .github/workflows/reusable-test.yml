@@ -1,0 +1,19 @@
+name: reusable-test
+
+on:
+  workflow_call:
+
+jobs:
+  testing:
+    name: Run Test / Testing
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [18, 20]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm install --prefix app
+      - run: npm --prefix app test
