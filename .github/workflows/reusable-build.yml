@@ -1,0 +1,12 @@
+name: reusable-build
+
+on:
+  workflow_call:
+
+jobs:
+  building:
+    name: Validate Build / Building
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t app:${{ github.sha }} ./app

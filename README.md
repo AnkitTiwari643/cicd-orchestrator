@@ -53,7 +53,16 @@ make version-show
 
 ## Files
 
-- `.github/workflows/ci-cd.yml` — the orchestrator + all gated jobs
+- `.github/workflows/ci-cd.yml` — thin orchestrator: routing outputs + gated calls
+- `.github/workflows/reusable-test.yml` — test matrix (Node 18/20)
+- `.github/workflows/reusable-coverage.yml` — coverage report artifact
+- `.github/workflows/reusable-build.yml` — Docker build validation
+- `.github/workflows/reusable-validate-pr.yml` — merge policy + PR hygiene (PR only)
+- `.github/workflows/reusable-version.yml` — patch bump + tag (push `main` only)
+- `.github/workflows/reusable-publish.yml` — release artifact
+- `.github/workflows/reusable-deploy.yml` — parameterized deploy (caller sets `qa`/`stg`/`prod`)
+- `.github/workflows/reusable-sync.yml` — merge `main` back into `integration`
+- `.github/workflows/reusable-smoke.yml` — post-deploy health check
 - `scripts/bump-version.sh` — patch bump, commit, tag (runs only on `main`)
 - `BRANCHING.md` — merge policy + version/sync explanation
 - `DECISIONS.md` — why single workflow + outputs over many files

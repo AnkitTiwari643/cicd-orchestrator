@@ -1,0 +1,24 @@
+name: reusable-sync
+
+# Push-to-main only. Merges main back into integration after the version
+# commit. If integration protection blocks direct pushes, replace the push
+# with: gh pr create --base integration --head main
+on:
+  workflow_call:
+
+jobs:
+  updating:
+    name: Sync Integration / Updating
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin main integration
+          git checkout integration
+          git merge --no-ff origin/main -m "chore(sync): merge main into integration after release" \
+            || { echo "Merge conflict — open a PR from main to integration instead"; exit 1; }
+          git push origin integration

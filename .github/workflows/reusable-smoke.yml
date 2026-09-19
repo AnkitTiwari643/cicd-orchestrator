@@ -1,0 +1,19 @@
+name: reusable-smoke
+
+on:
+  workflow_call:
+
+jobs:
+  smoke:
+    name: Post Deployment / Smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: |
+          npm install --prefix app
+          PORT=3999 APP_VERSION=$(cat VERSION) node app/index.js &
+          sleep 3
+          curl -fsS http://localhost:3999/health | grep -q ok && echo "✅ smoke passed"

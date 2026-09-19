@@ -1,0 +1,18 @@
+name: reusable-version
+
+# Push-to-main only. Bumps VERSION, commits, and tags, leaving main
+# exactly one commit ahead of integration (sync job follows).
+on:
+  workflow_call:
+
+jobs:
+  updating-version:
+    name: Version Up / Updating Version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - run: bash scripts/bump-version.sh
+      - run: git push origin main && git push origin --tags

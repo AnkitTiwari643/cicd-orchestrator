@@ -1,0 +1,20 @@
+name: reusable-publish
+
+on:
+  workflow_call:
+
+jobs:
+  publishing:
+    name: Publish Artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          mkdir -p dist
+          echo "${{ github.sha }}" > dist/SHA
+          cat VERSION > dist/VERSION
+          echo "${{ github.ref_name }}" > dist/BRANCH
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ github.sha }}
+          path: dist/
