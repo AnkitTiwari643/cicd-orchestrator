@@ -1,0 +1,11 @@
+{
+  "name": "orchestrator-demo-app",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
