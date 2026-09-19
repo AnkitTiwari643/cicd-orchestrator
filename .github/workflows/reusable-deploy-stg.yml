@@ -1,0 +1,15 @@
+name: reusable-deploy-stg
+
+# Approval gate lives here (static environment), because a caller job
+# that uses `uses:` cannot set `environment:` itself.
+on:
+  workflow_call:
+
+jobs:
+  deploying:
+    name: STG Deployment
+    runs-on: ubuntu-latest
+    environment: stg
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Deploying ${{ github.sha }} (v$(cat VERSION)) to STG"

@@ -113,29 +113,20 @@ jobs:
     name: QA Deployment
     needs: [orchestrate, publish-artifacts]
     if: needs.orchestrate.outputs.deploy_qa == 'true'
-    environment: qa
-    uses: ./.github/workflows/reusable-deploy.yml
-    with:
-      target: QA
+    uses: ./.github/workflows/reusable-deploy-qa.yml
 
   deploy-stg:
     name: STG Deployment
     needs: [orchestrate, publish-artifacts]
     if: needs.orchestrate.outputs.deploy_stg == 'true'
-    environment: stg
-    uses: ./.github/workflows/reusable-deploy.yml
-    with:
-      target: STG
+    uses: ./.github/workflows/reusable-deploy-stg.yml
 
   # ── Push main only: PROD behind approval gate ──
   deploy-prod:
     name: PROD Deployment / Approval
     needs: [orchestrate, publish-artifacts]
     if: needs.orchestrate.outputs.deploy_prod == 'true'
-    environment: prod
-    uses: ./.github/workflows/reusable-deploy.yml
-    with:
-      target: PROD
+    uses: ./.github/workflows/reusable-deploy-prod.yml
 
   # ── Push main only: sync integration with main (after version commit) ──
   sync-integration:

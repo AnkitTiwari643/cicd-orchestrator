@@ -1,0 +1,15 @@
+name: reusable-deploy-prod
+
+# Approval gate lives here (static environment), because a caller job
+# that uses `uses:` cannot set `environment:` itself.
+on:
+  workflow_call:
+
+jobs:
+  deploying:
+    name: PROD Deployment / Approval
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Deploying ${{ github.sha }} (v$(cat VERSION)) to PROD (approved)"

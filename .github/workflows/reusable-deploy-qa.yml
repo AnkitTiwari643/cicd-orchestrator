@@ -1,0 +1,15 @@
+name: reusable-deploy-qa
+
+# Approval gate lives here (static environment), because a caller job
+# that uses `uses:` cannot set `environment:` itself.
+on:
+  workflow_call:
+
+jobs:
+  deploying:
+    name: QA Deployment
+    runs-on: ubuntu-latest
+    environment: qa
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Deploying ${{ github.sha }} (v$(cat VERSION)) to QA"

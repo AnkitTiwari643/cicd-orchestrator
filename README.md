@@ -60,7 +60,9 @@ make version-show
 - `.github/workflows/reusable-validate-pr.yml` — merge policy + PR hygiene (PR only)
 - `.github/workflows/reusable-version.yml` — patch bump + tag (push `main` only)
 - `.github/workflows/reusable-publish.yml` — release artifact
-- `.github/workflows/reusable-deploy.yml` — parameterized deploy (caller sets `qa`/`stg`/`prod`)
+- `.github/workflows/reusable-deploy-qa.yml` — QA deploy (`environment: qa` gate lives here)
+- `.github/workflows/reusable-deploy-stg.yml` — STG deploy (`environment: stg` gate lives here)
+- `.github/workflows/reusable-deploy-prod.yml` — PROD deploy (`environment: prod` approval lives here)
 - `.github/workflows/reusable-sync.yml` — merge `main` back into `integration`
 - `.github/workflows/reusable-smoke.yml` — post-deploy health check
 - `scripts/bump-version.sh` — patch bump, commit, tag (runs only on `main`)
